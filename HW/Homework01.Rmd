@@ -1,0 +1,280 @@
+---
+title: "Hibernation Dataset"
+author: "Carol Zheng"
+date: "27 Jan 2023"
+output: html_document
+---
+
+This code helps set up the R markdown document to make a nice clean html file for sharing. 
+Click the green triangle to run the code chunk. 
+
+Note that all of your packages should be installed in the first code chunk.
+Tidyverse should generally be the last package installed.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+if (!require("UsingR")) install.packages("UsingR"); library(UsingR)
+if (!require("cowplot")) install.packages("cowplot"); library(cowplot)
+if (!require("readxl")) install.packages("readxl"); library(readxl)
+if (!require("tidyverse")) install.packages("tidyverse"); library(tidyverse)
+```
+
+For Homework 01 (only) you are *not* permitted to load any additional packages for your data analysis.
+
+The dataset that you will be analyzing came from the following paper:
+Heldstab SA, Isler K, van Schaik CP (2018) Hibernation constrains brain size evolution in mammals. Journal of Evolutionary Biology 31(10): 1582-1588. https://doi.org/10.1111/jeb.13353
+
+The dataset was downloaded from Dryad https://datadryad.org/, a data repository for biology. The citation for this dataset:
+Heldstab SA, Isler K, van Schaik CP (2018) Data from: Hibernation constrains brain size evolution in mammals. Dryad Digital Repository. https://doi.org/10.5061/dryad.753d06g
+
+Download the xls data from that page or from the class github repository and make sure that it is in the same folder as this Rmd file.
+
+```{r Import Data}
+Supplementary_material <- read_excel("Supplementary material.xlsx")
+```
+
+The description of the data:
+List of species and data used for this study (1104 mammalian species) including references for brain mass, body mass, hibernation, diurnality, substrate use, diet and mid-latitude of geographical distribution data
+## Exploring data
+```{r}
+head(Supplementary_material)
+summary(Supplementary_material)
+```
+
+Before you proceed with analyzing this dataset, check that it is complete and that you understand what each variable (column) means. You may need to refer to the paper (available in the repository).
+![Heldstab et al.](Heldstab_et_al-2018-Journal_of_Evolutionary_Biology.pdf)
+```{r}
+Supplementary_material
+```
+
+From the Methods section:
+
+Hibernation was coded as a binary variable with (0) for nonhibernating and (1) for hibernating species with data from the published literature.
+
+To control for diet quality, species were divided into four categories based on their main diet: herbivore or folivore (1), frugivore/folivore or granivore (2), frugivore/faunivore or omnivore (3) and faunivore, piscivore, carnivore or insectivore (4). A binary coding was used for activity period, with (0) for nocturnal, cathemeral or crepuscular species and (1) for diurnal species. For substrate use, each species was assigned to one of five substrate use categories: semi-aquatic (1), fossorial or semi-fossorial (2), terrestrial or semi-arboreal (3), arboreal (4) and volant (5).
+
+After becoming familiar with the dataset, conduct exploratory data analysis of the key variables to test the hypothesis provided in the title of the paper: "Hibernation constrains brain size evolution in mammals". 
+While you are exploring the data, come up with an alternative hypothesis and test it.
+
+the null hypothesis is hibernation doesn't constrain (decrese) brain size evolution in mammals.
+The alternative hypothesis is hibernation constrains (decreses) the brain size evolution in mammals.
+Since the paper claimed that the net energy intake should select for reduced brain size relative to body mass. Therefore, I want to focus on three variables: hibernation or not (ordinal categorical variable), brain size (quantitative variable), and body size (quantitative variable) for mammals in this study.
+
+
+```{r Contingency table}
+table(Supplementary_material$hibernation, useNA = "ifany")
+```
+Since the hibernation is a binary categorical variable, it is useful to make a bar plot to figure out if there's any NA value and observe the counts for either non-hibernated species and hibernated species.
+
+```{r Barplot123}
+ggplot(Supplementary_material) +
+  aes(x = hibernation) +
+  geom_bar() +
+  theme_cowplot()
+```
+Ok, there's no NA in hibernation and we can proceed.
+
+##Figure out the relationship between the hibernation and brain mass.
+
+#first need to check the conditions. 
+Condition 1: Even the researchers compiled a broad data set, they exclude the whales since they don't think the whales are possible to hibernate. Thus, this data set may not be randomly selected and we need to proceed with caution.
+Condition 2: The researchers collected the data from a total of 1104 mammalian species from 25 orders which has a sample size much bigger than 40 which is robust to extreme skewness and outliers. Then, we can assume the normality, but we still want to use the QQ-plot to figure out if the data set need to be transformed. This is most easily visualized using a quantile-quantile (Q-Q plot) to determine the difference between each data point and the normal distribution (the residuals).
+
+```{r}
+qqnorm(Supplementary_material$`brain mass`, main='Normal Q-Q Plot for Brain Mass')
+qqline(Supplementary_material$`brain mass`)
+```
+In the QQ Plot, it is obviously that there are a lot of deviations from 1 to 3 (right end) and showing a quartic tendency. It is ckear that some of the data is not normally distributed.
+To look more carefully at each of the quantitative variables, we can use the function 'simple.eda()' from the UsingR package.
+```{r histogram of body mass}
+simple.eda(Supplementary_material$`body mass`)
+simple.eda(Supplementary_material$`brain mass`)
+simple.eda(Supplementary_material$`hibernation`)
+```
+The histogram and qq plot for hibernation looks not normal, but this is what I expected since it's a categorical variable. But the body mass and brain mass also don't show the normality. Therefore, it is necessary to transform them with log 10 in front of the data fram for body mass and brain mass in the following analysis.
+
+Also, we can test their normality using the Shapiro-Wilk test 'shapiro.test()'. 
+If the p-value is < 0.05 then we have evidence to reject the hypothesis of a normal distribution.
+Normally distributed data will have a p-value GREATER THAN 0.05
+```{r}
+shapiro.test(Supplementary_material$`brain mass`)
+```
+With a extremely small p-value, it is definitely not having a normal distribution. Therefore,we will either have to transform the data so that it meets the assumption of a normal distribution or we will have to use non-parametric statistical tests.
+
+#Tranform the Brain Size with log 10
+```{r histogram of log10 brain mass}
+ggplot(Supplementary_material, aes(x=log10(`brain mass`))) + 
+  geom_histogram(color="black", fill="white", bins = 5) +
+  theme_cowplot()+
+  xlab("Log 10 of Brain Mass")
+```
+The histogram with log 10 of the brain mass is approximately normal and centered around 1 which is better than the histogram before transformation. Therefore, we can proceed and try to figure out the relationship between the brain mass and hibernation.
+
+```{r}
+brain_mass= log10(Supplementary_material$`brain mass`)
+
+qqnorm(brain_mass)
+qqline(brain_mass)
+
+simple.eda(brain_mass)
+
+shapiro.test(brain_mass)
+```
+However, there are some data points deviated from the reference line in the QQ plot and the p-value from the shapiro test is much lower than 0.05. We failed to obtain the normality from transforming the brain mass with log 10. I tried sqrt(sqrt), log, and ln before, but their results are even worse than the transformation with log10. But the histogram for log10 of brain size is approximately normal and centered around 1. Also, we have over 1000 samples collected in this study which is bigger than 40. Therefore, our sample is robusted to extreme skewness and outliers. Thus, we can assume the normality and proceed with caution.
+
+
+```{r brain mass vs hibernation, warning=FALSE}
+ggplot(Supplementary_material) +
+  aes(x = as.factor(`hibernation`), y = `brain mass`) +
+  geom_point(aes(color = )) +
+  theme_cowplot()  +
+  xlab("Hibernation") + 
+  ylab("Brain Mass")+
+  scale_x_discrete(labels=c("Nonhibernators","Hibernators"))
+```
+The data points are too concentrated lies at the brain mass below 1000. Therefore, we can try to transform the brain mass with log 10 and see if the point plot is better.
+
+```{r log10 brain mass vs hibernation, warning=FALSE}
+ggplot(Supplementary_material) +
+  aes(x = as.factor(`hibernation`), y = log10(`brain mass`)) +
+  geom_point(aes(color = )) +
+  theme_cowplot()  +
+  xlab("Hibernation") + 
+  ylab("Log 10 of Brain Mass")+
+  scale_x_discrete(labels=c("Nonhibernators","Hibernators"))
+```
+Looks better! But it looks like it will be better to use a side-to-side boxplot (since we are comparing a quantitative variable and a categorical variable) to figure out if the true population mean of  log10 of the brain size is different between nonhibernated species and hibernated species.
+
+```{r box plot +jitter for hibernation and brain mass}
+ggplot(Supplementary_material) +
+  aes(x = factor(`hibernation`), y = log10(`brain mass`)) +
+  geom_boxplot() +
+  geom_jitter(color="black", size=0.4, alpha=0.9) +
+  theme_cowplot() +
+  xlab("Hibernation") + 
+  ylab("Log 10 Brain Mass")+
+  scale_x_discrete(labels=c("Nonhibernators","Hibernators"))
+```
+With completely different IQR between different groups, it is obviously that the true population mean of the brain size is higher for non-hibernated group (0) than the hibernated group(1). But it is still worthy to perform a two-sample t-test. Since we are comparing two independent groups with different means and unknown standard error.
+
+
+```{r}
+t.test(log10(`brain mass`) ~ hibernation, data = Supplementary_material)
+```
+Since the t statistic is 8.2363 and the p-value is 9.259e-13 which is smaller than the significance level of 0.05. Therefore, we can reject the null hypothesis and have sufficient evidence that the hibernation constrain/decrease the brain size/mass in mammals. In the future, we might want to perform some residual plots to make sure our conclusion is not due to chance.
+
+#The third variable_body size
+I want to  focused on the relationship between the two quantitative variables(brain mass and body size). Therefore, a scatter plot might be useful.
+
+The scatter plot of the brain mass and body mass shows a moderately strong positive linear regression line which indicates that higher the body mass, higher the brain mass
+```{r}
+cor(Supplementary_material$`body mass`, Supplementary_material$`brain mass`)
+```
+With the correlation closed to 1, it shows that the brain mass is positively related to the body mass.
+And it is reasonable to use the body mass as the third variable. Therefore, I would like to check the conditions that required to perform two separate tests.
+
+Condition 1: SRS met.
+Condition 2: The researchers collected the data from a total of 1104 mammalian species from 25 orders which has a sample size much bigger than 40 which is robust to extreme skewness and outliers. Then, we can assume the normality, but we still want to use the QQ-plot to figure out if the data set need to be transformed. This is most easily visualized using a quantile-quantile (Q-Q plot) to determine the difference between each data point and the normal distribution (the residuals).
+
+For Body Mass and Brain Mass (interference for regression test):
+Null hypothesis: body mass has no impact on the brain mass/ there's no relationship between the body mass and the brain mass;
+alternative hypothesis: there's a linear relationship between the brain mass and body mass. 
+
+```{r}
+qqnorm(Supplementary_material$`body mass`, main='Normal Q-Q Plot for Body Mass')
+qqline(Supplementary_material$`body mass`)
+```
+there are some deviations after about 1.5 in theoretical quantiles from the reference line and the sample quantiles looks too big in range that makes the reference line not 45 degree (not good...). Therefore, i may want to use log10 to transform the body size.
+
+```{r histogram of log10 body mass}
+ggplot(Supplementary_material, aes(x=log10(`body mass`))) + 
+  geom_histogram(color="black", fill="white", bins = 5) +
+  theme_cowplot()+
+  xlab("Log 10 of Body Mass")
+```
+Looks pretty symetrical and centered around 2.5! Let's check its qq plot and shapiro result.
+```{r}
+body_mass= log10(Supplementary_material$`body mass`)
+
+qqnorm(body_mass)
+qqline(body_mass)
+
+simple.eda(body_mass)
+
+shapiro.test(body_mass)
+```
+However, there are some data points deviated from the reference line in the QQ plot and the p-value from the shapiro test is much lower than 0.05. We failed to obtain the normality from transforming the body mass with log 10. I tried sqrt(sqrt), log, and ln before, but their results are even worse than the transformation with log10. But the histogram for log10 of brain size is approximately normal and centered around 2.5. Also, we have over 1000 samples collected in this study which is bigger than 40. Therefore, our sample is robusted to extreme skewness and outliers. Thus, we can assume the normality and proceed with caution.
+
+
+```{r body mass vs brain mass, warning=FALSE}
+ggplot(Supplementary_material) +
+  aes(x = body_mass, y = brain_mass) +
+  geom_point(aes(color = factor(hibernation))) +
+  theme_cowplot() +
+  labs(color="Hibernation Style") +
+  xlab("Log 10 Body Mass") + 
+  ylab("Log 10 Brain Mass")+
+  geom_smooth(method = "lm") 
+```
+Looks perfectly linear!Therefore, we can conclude that there's a linear relationship between the body mass and the brain mass for mammals.
+
+Then, let's test the relationship between the body mass and hibernation in mammals. Since it is a quantitative variable compared to categorical variable with two independent variables and different means. Thus, we need to perform two-samples t-test.
+
+null hypothesis: The mammal that hibernated has the same body mass than the non-hibernator mammal.
+alternative hypothesis: The mammal that hibernated tends to have bigger body mass than the non-hibernator.
+
+```{r body mass vs hibernation, warning=FALSE}
+ggplot(Supplementary_material) +
+  aes(x = as.factor(`hibernation`), y = `body mass`) +
+  geom_point(aes(color = )) +
+  theme_cowplot()  +
+  xlab("Hibernation") + 
+  ylab("Body Mass")+
+  scale_x_discrete(labels=c("Nonhibernators","Hibernators"))
+```
+Looks too concentrated... Let's try the log10 transformation for the body mass.
+
+```{r log10 body mass vs hibernation, warning=FALSE}
+ggplot(Supplementary_material) +
+  aes(x = as.factor(`hibernation`), y = log10(`body mass`)) +
+  geom_point(aes(color = )) +
+  theme_cowplot()  +
+  xlab("Hibernation") + 
+  ylab("Log 10 of Body Mass")+
+  scale_x_discrete(labels=c("Nonhibernators","Hibernators"))
+```
+Looks better! But it looks like it will be better to use a side-to-side boxplot (since we are comparing a quantitative variable and a categorical variable) to figure out if the true population mean of  log10 of the body size is different between non-hibernated species and hibernated species.
+
+```{r box plot +jitter for hibernation and body mass}
+ggplot(Supplementary_material) +
+  aes(x = factor(`hibernation`), y = log10(`body mass`)) +
+  geom_boxplot() +
+  geom_jitter(color="black", size=0.4, alpha=0.9) +
+  theme_cowplot() +
+  xlab("Hibernation") + 
+  ylab("Log 10 Body Mass")+
+  scale_x_discrete(labels=c("Nonhibernators","Hibernators"))
+```
+With completely different IQR between different groups, it is obviously that the true population mean of the body size is higher for non-hibernated group (0) than the hibernated group(1). But it is still worthy to perform a two-sample t-test. Since we are comparing two independent groups with different means and unknown standard error.
+```{r}
+t.test(log10(`body mass`) ~ hibernation, data = Supplementary_material)
+```
+Since the t statistic is 7.0389 and the p-value is 3.168e-10 which is smaller than the significance level of 0.05 that we assumed. Therefore, we can reject the null hypothesis and have sufficient evidence that the mammals that hibernated tends to have bigger body mass. In the future, we might want to perform some residual plots to make sure our conclusion is not due to chance.
+
+
+
+
+Completion of the assignment requires:
+(1) sufficient exploration of the data to support your chosen method of analysis
+(2) a graph that provides a clear illustration of support (or lack of support) for the paper's hypothesis
+(3) a statistical test that quantifies the level of support for the paper's hypothesis
+
+To receive full credit for the assignment you will need to provide: 
+(1) step-by-step explanation of your exploration of the data to support your chosen method of analysis
+(2) graphs that provide a clear illustration of support (or lack of support) for both hypothesis
+(3) a statistical test that quantifies the level of support for your hypothesis
+
+## Acknowledgements
+All assignments and exams should include an acknowledgements section where you cite all sources of help that you received for that project.
+You DO NOT need to acknowledge help from Prof. Field or any TAs for the class.
+You DO need to include links to any websites that you used, name any peers that you worked with, and include any prompts that you provided to OpenAI or other machine learning tools.
